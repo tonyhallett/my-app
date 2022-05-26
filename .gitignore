@@ -9,7 +9,11 @@
 /coverage
 
 # production
-/build
+/dist
+/.parcel-cache
+
+# vscode
+/.vscode
 
 # misc
 .DS_Store

@@ -1,26 +1,152 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React, { useEffect, useReducer, useState } from 'react';
+import { Payload, webviewPayloadTypeListen, webviewPayloadTypeUnlisten } from './webviewListener';
+import { registerIcons, ThemeProvider } from '@fluentui/react';
+import { LogMessage, Report, ReportOptions, Styling } from './types';
+import { ReportTab } from './ReportTab';
+import{ OpenFileIcon, SortDownIcon, SortUpIcon, ClearFilterIcon, FilterIcon, ChevronDownIcon, createSvgIcon, ChevronRightMedIcon, TagIcon, BeerMugIcon, GitHubLogoIcon, ReviewSolidIcon, InfoIcon, WarningIcon, ErrorIcon, CompletedIcon, TableIcon, ProcessingIcon, OpenPaneIcon, NavigateExternalInlineIcon, ErrorBadgeIcon, RunningIcon, DeveloperToolsIcon } from'@fluentui/react-icons-mdl2';
+
+//https://github.com/microsoft/fluentui/issues/22895
+const VisualStudioIDELogo32Icon = createSvgIcon({
+  svg: ({ classes }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 2048" className={classes.svg}>
+      <path d="M2048 213v1622l-512 213L0 1536l1536 223V0l512 213zM245 1199l-117-39V590l117-39 283 213 470-465 282 119v913l-282 120-470-466-283 214zm430-324l323 244V631L675 875zm-430 169l171-169-171-170v339z" />
+    </svg>
+  ),
+  displayName: 'VisualStudioIDELogo32Icon',
+});
+
+const VisualStudioLogoIcon = createSvgIcon({
+  svg: ({ classes }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 2048" className={classes.svg}>
+      <path d="M1472 128l448 171v1429l-448 192-704-704-469 363-171-107V577l171-108 469 363 704-704zM320 1280l256-256-256-256v512zm1152 128V640l-448 384 448 384z" />
+    </svg>
+  ),
+  displayName: 'VisualStudioLogoIcon',
+});
+
+
+registerIcons({
+  icons: {
+    OpenFile: <VisualStudioIDELogo32Icon />,
+    sortDown: <SortDownIcon/>,
+    sortUp:<SortUpIcon/>,
+    clear:<ClearFilterIcon/>,
+    filter:<FilterIcon/>,
+    chevrondown:<ChevronDownIcon/>,
+    chevronrightmed:<ChevronRightMedIcon/>,
+    tag:<TagIcon/>,
+    beerMug:<BeerMugIcon/>,
+    github:<GitHubLogoIcon/>,
+    review:<ReviewSolidIcon/>,
+    info:<InfoIcon/>,
+    warning:<WarningIcon/>,
+    error:<ErrorBadgeIcon/>,
+    completed:<CompletedIcon/>,
+    table:<TableIcon/>,
+    processing:<ProcessingIcon/>,
+    openPane:<OpenPaneIcon/>,
+    navigate:<NavigateExternalInlineIcon/>,
+    running:<RunningIcon/>,
+    tool:<DeveloperToolsIcon/>
+  },
+});
+
+
+
+
+
+const anyWindow = window as any;
+
+
+if(process.env.MOCK_WEBVIEW){
+  let reactListener:(msgEvent:MessageEvent<Payload<unknown>>) => void
+  anyWindow.invokeMessageEvent = (msgEvent:MessageEvent<Payload<unknown>>) => {
+    reactListener(msgEvent);
+  }
+  anyWindow.chrome.webview = {
+    addEventListener:(_:string,listener:(msgEvent:MessageEvent<Payload<unknown>>) => void) => {
+      reactListener = listener;
+    }
+  }
+}
+
+interface NewMessageAction{
+  type:'newMessage',
+  payload:LogMessage
+}
+interface ClearMessagesAction{
+  type:'clear'
+}
+function logMessagesReducer(logMessages:LogMessage[],action:NewMessageAction | ClearMessagesAction):LogMessage[]{
+  switch(action.type){
+    case 'newMessage':
+      return [action.payload,...logMessages];
+    default:
+      return [];
+
+  }
+}
 
 function App() {
+  const standalone = !!anyWindow.styling;
+  const [logMessages, setLogMessages] = useReducer(logMessagesReducer,[]);
+  const [stylingState, setStyling] = useState<Styling>(standalone ? anyWindow.styling : undefined);
+  const [reportState, setReport] = useState<Report>(standalone ? anyWindow.report : undefined);
+  const [reportOptionsState, setReportOptions] = useState<ReportOptions>(standalone ? anyWindow.reportOptions : {namespacedClasses:true});
+  
+  useEffect(() => {
+    function stylingListener(styling:Styling){
+      // todo fluentui/react styling theming
+      var environmentColors = styling.categoryColours.EnvironmentColors;
+      document.body.style.backgroundColor = environmentColors.ToolWindowBackground;
+      document.body.style.color = environmentColors.ToolWindowText;
+
+      document.body.style.fontFamily = styling.fontName;
+      document.body.style.fontSize = styling.fontSize;
+      setStyling(styling);
+    }
+
+    function reportOptionsListener(reportOptions:ReportOptions){
+      setReportOptions(reportOptions);
+    }
+
+    function reportListener(report:Report){
+      setReport(report);
+    }
+    function messageListener(logMessage:LogMessage){
+      // the clear messages will need to call back here to remove from state
+      setLogMessages({type:'newMessage',payload:logMessage});
+    }
+
+    if (!standalone){
+      webviewPayloadTypeListen("Report",reportListener);
+      webviewPayloadTypeListen("styling",stylingListener);
+      webviewPayloadTypeListen("reportOptions",reportOptionsListener);
+      webviewPayloadTypeListen("message",messageListener);
+
+      /* return function cleanUp(){
+        webviewPayloadTypeUnlisten("styling",stylingListener);
+        webviewPayloadTypeUnlisten("Report",reportListener);
+        webviewPayloadTypeUnlisten("ReportOptions",reportOptionsListener);
+        webviewPayloadTypeUnlisten("message",messageListener);
+      } */
+    }
+    
+  },[])
+
+  if (!stylingState){
+    return <div></div>
+  }
+
+  
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <ThemeProvider>
+       <ReportTab styling={stylingState} standalone={standalone} report={reportState} reportOptions={reportOptionsState} logMessages={logMessages}/>
+    </ThemeProvider>
   );
 }
+
+
 
 export default App;
