@@ -19,7 +19,7 @@
   "scripts": {
     "start": "rimraf dist/serve&& parcel src/html/debug/parcel-dev.index.html --dist-dir dist/serve",
     "build-prod": "parcel build src/html/build/index.html --dist-dir dist/build",
-    "build-dev": "rimraf dist/debug/*&&set REACT_PROFILING=true&& parcel build --log-level verbose src/html/debug/index.html --dist-dir dist/debug&& npm run build-dev-completed",
+    "build-dev": "rimraf dist/debug/*&&set REACT_PROFILING=true&& parcel build src/html/debug/index.html --dist-dir dist/debug&& npm run build-dev-completed",
     "build": "npm run build-dev && npm run build-prod",
     "build-dev-completed": "ts-node scripts/dev-build-completed-notification.ts",
     "test": "jest",

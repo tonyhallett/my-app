@@ -20,11 +20,17 @@ export interface ClassCoverage{
   codeElementCoverageQuota: number | null
 }
 
+export enum CoverageType{
+  LineCoverage,
+  MethodCoverage
+}
+
 export type Class = ClassCoverage & {
   name: string
   displayName: string
   files: CodeFile[]
-  assemblyIndex:number  
+  assemblyIndex:number,
+  coverageType:CoverageType  
 }
 
 export interface CodeFile{
@@ -73,9 +79,6 @@ export interface RiskHotspotAnalysisResult{
   
   // applies to a method
   export interface RiskHotpot{ 
-    // use the first 4 to construct the path necessary for vs to open
-    //assembly:Assembly,
-    //class:Class,
     assemblyIndex: number,
     classIndex: number,
     methodMetric:MethodMetric,
@@ -97,38 +100,23 @@ export interface RiskHotspotAnalysisResult{
     line:number | null
   }
   
-  export interface Metric{
-    /*
-      todo 
-      MergeOrder - MetricMergeOrder enum HigherIsBetter / LowerIsBetter
-      ExplanationUrl - Uri toString automatic ?
-      MetricType - MetricType enum 
-            /// <summary>
-            /// Type of a <see cref="Metric"/>.
-            /// </summary>
-            public enum MetricType
-            {
-                /// <summary>
-                /// Percentual value (e.g. line coverage).
-                /// </summary>
-                CoveragePercentual,
-  
-                /// <summary>
-                /// A sumable metric (e.g. number of covered/uncovered blocks).
-                /// </summary>
-                CoverageAbsolute,
-  
-                /// <summary>
-                /// Code quality indicator (e.g. cyclomatic complexity).
-                /// </summary>
-                CodeQuality,
-            }
-    */
+export enum MetricType {
+  CoveragePercentual,
+  CoverageAbsolute,
+  CodeQuality
+}
 
-    id:number,
+export enum MetricMergeOrder {
+  HigherIsBetter,
+  LowerIsBetter
+}
+
+  export interface Metric {
+    metricType:MetricType
+    mergeOrder:MetricMergeOrder
+    explanationUrl:string
     name:string,
     value : number | null
-  
   }
   
   
@@ -168,11 +156,13 @@ export interface RiskHotspotAnalysisResult{
     Warning,
     Error,
     CoverageStart,
+    CoverageCancelled,
     CoverageCompleted,
     CoverageToolStart,
     CoverageToolCompleted,
     ReportGeneratorStart,
     ReportGeneratorCompleted,
+    TaskStarted,
     TaskCompleted // file synchronization
   }
   export interface LogMessage{

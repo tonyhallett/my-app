@@ -1,9 +1,9 @@
 import React, { useEffect, useReducer, useState } from 'react';
 import { Payload, webviewPayloadTypeListen, webviewPayloadTypeUnlisten } from './webviewListener';
-import { registerIcons, ThemeProvider } from '@fluentui/react';
-import { LogMessage, Report, ReportOptions, Styling } from './types';
+import { ProgressIndicator, registerIcons, ThemeProvider } from '@fluentui/react';
+import { LogMessage, MessageContext, Report, ReportOptions, Styling } from './types';
 import { ReportTab } from './ReportTab';
-import{ OpenFileIcon, SortDownIcon, SortUpIcon, ClearFilterIcon, FilterIcon, ChevronDownIcon, createSvgIcon, ChevronRightMedIcon, TagIcon, BeerMugIcon, GitHubLogoIcon, ReviewSolidIcon, InfoIcon, WarningIcon, ErrorIcon, CompletedIcon, TableIcon, ProcessingIcon, OpenPaneIcon, NavigateExternalInlineIcon, ErrorBadgeIcon, RunningIcon, DeveloperToolsIcon } from'@fluentui/react-icons-mdl2';
+import{ OpenFileIcon, SortDownIcon, SortUpIcon, ClearFilterIcon, FilterIcon, ChevronDownIcon, createSvgIcon, ChevronRightMedIcon, TagIcon, BeerMugIcon, GitHubLogoIcon, ReviewSolidIcon, InfoIcon, WarningIcon, ErrorIcon, CompletedIcon, TableIcon, ProcessingIcon, OpenPaneIcon, NavigateExternalInlineIcon, ErrorBadgeIcon, RunningIcon, DeveloperToolsIcon, ProcessingCancelIcon, LogRemoveIcon, GroupedDescendingIcon } from'@fluentui/react-icons-mdl2';
 
 //https://github.com/microsoft/fluentui/issues/22895
 const VisualStudioIDELogo32Icon = createSvgIcon({
@@ -44,10 +44,13 @@ registerIcons({
     completed:<CompletedIcon/>,
     table:<TableIcon/>,
     processing:<ProcessingIcon/>,
+    processingCancelled:<ProcessingCancelIcon/>,
     openPane:<OpenPaneIcon/>,
     navigate:<NavigateExternalInlineIcon/>,
     running:<RunningIcon/>,
-    tool:<DeveloperToolsIcon/>
+    tool:<DeveloperToolsIcon/>,
+    logRemove:<LogRemoveIcon/>,
+    groupeddescending:<GroupedDescendingIcon/>,
   },
 });
 
@@ -80,7 +83,8 @@ interface ClearMessagesAction{
 function logMessagesReducer(logMessages:LogMessage[],action:NewMessageAction | ClearMessagesAction):LogMessage[]{
   switch(action.type){
     case 'newMessage':
-      return [action.payload,...logMessages];
+      const newMessage = action.payload;
+      return [newMessage,...logMessages];
     default:
       return [];
 
@@ -89,11 +93,16 @@ function logMessagesReducer(logMessages:LogMessage[],action:NewMessageAction | C
 
 function App() {
   const standalone = !!anyWindow.styling;
-  const [logMessages, setLogMessages] = useReducer(logMessagesReducer,[]);
+  const [logMessages, logMessagesDispatch] = useReducer(logMessagesReducer,[]);
   const [stylingState, setStyling] = useState<Styling>(standalone ? anyWindow.styling : undefined);
   const [reportState, setReport] = useState<Report>(standalone ? anyWindow.report : undefined);
+  const [coverageRunning,setCoverageRunning] = useState(false);
   const [reportOptionsState, setReportOptions] = useState<ReportOptions>(standalone ? anyWindow.reportOptions : {namespacedClasses:true});
-  
+  const clearLogMessages = React.useCallback(() => {
+    logMessagesDispatch({
+      type:'clear'
+    })
+  },[]);
   useEffect(() => {
     function stylingListener(styling:Styling){
       // todo fluentui/react styling theming
@@ -113,16 +122,25 @@ function App() {
     function reportListener(report:Report){
       setReport(report);
     }
+    
     function messageListener(logMessage:LogMessage){
-      // the clear messages will need to call back here to remove from state
-      setLogMessages({type:'newMessage',payload:logMessage});
+      if (logMessage.context === MessageContext.CoverageStart){
+        setCoverageRunning(true);
+      }
+      
+      logMessagesDispatch({type:'newMessage',payload:logMessage});
+    }
+
+    function coverageStoppedListener(){
+      setCoverageRunning(false);
     }
 
     if (!standalone){
-      webviewPayloadTypeListen("Report",reportListener);
+      webviewPayloadTypeListen("report",reportListener);
       webviewPayloadTypeListen("styling",stylingListener);
       webviewPayloadTypeListen("reportOptions",reportOptionsListener);
       webviewPayloadTypeListen("message",messageListener);
+      webviewPayloadTypeListen("coverageStopped",coverageStoppedListener)
 
       /* return function cleanUp(){
         webviewPayloadTypeUnlisten("styling",stylingListener);
@@ -138,11 +156,20 @@ function App() {
     return <div></div>
   }
 
-  
+  const percentComplete = coverageRunning ? undefined : 0;
 
   return (
-    <ThemeProvider>
-       <ReportTab styling={stylingState} standalone={standalone} report={reportState} reportOptions={reportOptionsState} logMessages={logMessages}/>
+    <ThemeProvider >
+      <ProgressIndicator percentComplete={percentComplete}/>
+      <ReportTab 
+        styling={stylingState} 
+        standalone={standalone} 
+        report={reportState} 
+        reportOptions={reportOptionsState} 
+        logMessages={logMessages}
+        clearLogMessages={clearLogMessages}
+        />
+        
     </ThemeProvider>
   );
 }

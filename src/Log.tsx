@@ -13,7 +13,9 @@ function getIconNameForContext(messageContext:MessageContext){
     case MessageContext.Error:
       return "error";
     case MessageContext.CoverageStart:
-      return "running";
+      return "processing";
+    case MessageContext.CoverageCancelled:
+      return "processingCancelled";
     case MessageContext.TaskCompleted:
     case MessageContext.ReportGeneratorCompleted:
     case MessageContext.CoverageCompleted:
@@ -33,14 +35,13 @@ function getIconNameForHostObjectMethod(hostObject:string,method:string){
   return 'navigate';
 }
 
-export function Log(props:{logMessages:LogMessage[],styling:Styling}) {
-  const {logMessages,styling} = props;
-  return <>
-  {logMessages.map((logMessage,i) => {
-    const activityDescription:React.ReactNode[] = [
-
-    ];
-    logMessage.message.forEach((msgPart,j) => {
+export function Log(props:{logMessages:LogMessage[],styling:Styling, clearLogMessages:() => void}) {
+  const {logMessages,styling, clearLogMessages} = props;
+  const activityItemsOrBreaks:any[] = [];
+  logMessages.forEach((logMessage,i) => {
+    
+    const activityDescription:React.ReactNode[] =
+    logMessage.message.map((msgPart,j) => {
       if(msgPart.type === 'emphasized' ){
         const emphasisStyle:CSSProperties={
           fontFamily:getFontFamily(styling.fontName),
@@ -57,25 +58,32 @@ export function Log(props:{logMessages:LogMessage[],styling:Styling}) {
         if(msgPart.emphasis & Emphasis.Underline){
           emphasisStyle.textDecoration = 'underline';
         }
-        activityDescription.push(<span key='message' style={emphasisStyle}>{msgPart.message}</span>);
+        return <span key={j} style={emphasisStyle}>{msgPart.message}</span>;
       }else{
-        
-        const actionButton = <ActionButton key='action' iconProps={{iconName:getIconNameForHostObjectMethod(msgPart.hostObject,msgPart.methodName)}} onClick={() => {
+        const actionButton = <ActionButton key={j} iconProps={{iconName:getIconNameForHostObjectMethod(msgPart.hostObject,msgPart.methodName)}} onClick={() => {
           const hostObject = (window as any).chrome.webview.hostObjects[msgPart.hostObject];
           const hostMethod:Function = hostObject[msgPart.methodName];
-          hostMethod.apply(msgPart.arguments);
+          hostMethod.apply(null,msgPart.arguments);
         }}>{msgPart.title}</ActionButton>
-        activityDescription.push(actionButton);
+        return actionButton;
       }
     })
 
     let activityIconProps:Partial<IActivityItemProps> = {
       activityDescription,
-      activityIcon:<Icon iconName={getIconNameForContext(logMessage.context)}/>,
+      activityIcon:<Icon style={{marginLeft:'10px'}} iconName={getIconNameForContext(logMessage.context)}/>,
       isCompact:false
     }
     
-    return <ActivityItem {...activityIconProps} key={i}/>
-  })}
+    activityItemsOrBreaks.push(<ActivityItem {...activityIconProps} key={i}/>);
+
+    // works for ms code coverage but not for old as there are info messages before CoverageStart
+    /* if(i !== 0 && logMessage.context === MessageContext.CoverageStart){
+      activityItemsOrBreaks.push(<br key={`break${i}`}/>);
+    } */
+  })
+  return <>
+  <IconButton iconProps={{iconName:'logRemove'}} onClick={clearLogMessages}/>
+  {activityItemsOrBreaks}
   </>
 }

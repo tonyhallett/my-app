@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DetailsList, DetailsRow, GroupHeader, IColumn, IFocusZoneProps, IGroup, IGroupHeaderProps, ISearchBoxStyles, ISliderStyles, ProgressIndicator, SearchBox, SelectionMode, Slider, Stack, TextField } from '@fluentui/react';
-import { Assembly, Class, ClassCoverage, SummaryResult } from './types';
+import { Assembly, Class, ClassCoverage, CoverageType, SummaryResult } from './types';
 import { OpenFileButton } from './OpenFileButton';
 import { removeNamespaces } from './common';
 
@@ -25,6 +25,8 @@ export interface ICoverageItem extends ICoverageItemBase{
   totalBranches:number;
 }
 
+//#region columns
+
 interface ICoverageColumn extends IColumn{
   fieldName:keyof ICoverageItemBase
 }
@@ -32,6 +34,7 @@ interface ICoverageColumn extends IColumn{
 interface NameColumn extends ICoverageColumn{
   setFiltered:(filtered:boolean) => void
 }
+
 const nameColumn:NameColumn = {
   key:'name',
   name:'Name',
@@ -164,6 +167,8 @@ const codeElementCoverageQuotaColumn:ICoverageColumn = {
   }
 }
 
+//#endregion
+
 export function getGroupingMax(assemblies:Assembly[]): number{
   let groupingMax = 0;
     assemblies.forEach(assembly => {
@@ -218,9 +223,13 @@ class CoverageItem implements ICoverageItem{
     this.coverableLines = cls.coverableLines;
     this.uncoveredLines = cls.coverableLines - cls.coveredLines;
     this.totalLines = cls.totalLines === null ? 0 : cls.totalLines;
-    // todo special coverageQuota todo - for now
-    this.coverageQuota = cls.coverageQuota;
-
+    if (this.coverableLines === 0){
+      if (cls.coverageType === CoverageType.MethodCoverage && cls.coverageQuota !== null){
+        this.coverageQuota = cls.coverageQuota;
+      }
+    } else {
+      this.coverageQuota = getQuota(cls.coveredLines, cls.coverableLines);
+    }
     
     this.totalBranches = cls.totalBranches === null ? 0 : cls.totalBranches;
     this.coveredBranches = cls.coveredBranches === null ? 0 : cls.coveredBranches;
@@ -234,7 +243,7 @@ class CoverageItem implements ICoverageItem{
     return this.name.toLowerCase().indexOf(filter.toLowerCase()) > -1;
   }
   isFullyCovered():boolean{
-    return this.coverageQuota !== null && this.coverageQuota === 100;
+    return this.coverageQuota !== null && this.coverageQuota === 100 && this.branchCoverageQuota !== null && this.branchCoverageQuota === 100;
   }
 }
 
@@ -346,7 +355,7 @@ function getGrouping(namespacedClass:string,level:number):string{
   const parts = namespacedClass.split('.');
   const namespaceParts = parts.length - 1;
   if(namespaceParts === 0){
-    return "Global";
+    return "( Global )";
   }
   const takeParts = namespaceParts < level ? namespaceParts : level;
   return parts.slice(0,takeParts).join('.');
@@ -520,13 +529,7 @@ export function Coverage(props:CoverageProps) {
   },[assemblies, namespacedClasses,grouping])
 
 
-  const items:ICoverageItem[] = [];
-  function applyClassesGroup(group:ClassesGroup){
-    group.count = group.items.length;
-    group.startIndex = items.length;
-    items.push(...group.items);
-  }
-  const workaroundIssueGroups:ICoverageGroup[] = []; // https://github.com/microsoft/fluentui/issues/23169
+
   
   if(groups.length > 1){
     const rootGroupsSort = sortDetails.fieldName ? sortDetails.fieldName : 'name';
@@ -534,8 +537,15 @@ export function Coverage(props:CoverageProps) {
     sortCoverageItems(groups,rootGroupsSort,rootGroupAscending)
   }
   
+  nameColumn.isGrouped = grouping > -1;
   
-
+  const items:ICoverageItem[] = [];
+  function applyClassesGroup(group:ClassesGroup){
+    group.count = group.items.length;
+    group.startIndex = items.length;
+    items.push(...group.items);
+  }
+  const workaroundIssueGroups:ICoverageGroup[] = []; // https://github.com/microsoft/fluentui/issues/23169
   groups.forEach(group => {
     group.filter(filter,props.hideFullyCovered);
     if(sortDetails.fieldName){
